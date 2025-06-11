@@ -2,15 +2,18 @@ const express = require('express');
 const router = express.Router();
 
 const {
-  createOrUpdateDailyTimetable,
-  deleteTimetable,
-  searchFacultyByHOD,
-  getFacultyTimetablesForHOD,
-  getUserTimetableForDay,
-  searchTimetable
+    createOrUpdateDailyTimetable,
+    updateTimetableSlot,    // NEW: Imported update function
+    deleteTimetable,
+    deleteTimetableSlot,    // NEW: Imported delete slot function
+    searchFacultyByHOD,
+    getFacultyTimetablesForHOD,
+    getUserTimetableForDay, // For /daily-view
+    searchTimetable,
+    getTimetableForDay      // For /day/:day
 } = require('../controllers/timetableController');
 
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorizeRoles } = require('../middleware/authMiddleware'); // Assuming this middleware exists
 
 // POST - Create or update daily timetable (admin only)
 router.post('/daily', protect(['admin']), createOrUpdateDailyTimetable);
@@ -18,8 +21,14 @@ router.post('/daily', protect(['admin']), createOrUpdateDailyTimetable);
 // GET - Search timetable (all roles)
 router.get('/search', protect(['admin', 'hod', 'faculty', 'student']), searchTimetable);
 
-// DELETE - Delete timetable by ID (admin only)
+// DELETE - Delete entire daily timetable by ID (admin only)
 router.delete('/:id', protect(['admin']), deleteTimetable);
+
+// PUT - Update a specific slot within a daily timetable entry (admin only)
+router.put('/:id/slot/:slotId', protect(['admin']), updateTimetableSlot); // <--- THIS IS THE PUT ROUTE
+
+// DELETE - Delete a specific slot from a daily timetable entry (admin only)
+router.delete('/:dailyTimetableId/slot/:slotId', protect(['admin']), deleteTimetableSlot); // <--- Now uses controller function
 
 // GET - Faculty timetables filtered by HOD (hod only)
 router.get('/faculty-by-hod', protect(['hod']), searchFacultyByHOD);
@@ -27,42 +36,10 @@ router.get('/faculty-by-hod', protect(['hod']), searchFacultyByHOD);
 // GET - All faculty timetables for HOD's department (hod only)
 router.get('/faculty-timetables', protect(['hod']), getFacultyTimetablesForHOD);
 
-// GET - Daily timetable view for faculty/student/hod
+// GET - Daily timetable view for faculty/student/hod (using query params)
 router.get('/daily-view', protect(['faculty', 'student', 'hod']), getUserTimetableForDay);
 
-// GET - Timetable for a day by role and user's department
-router.get('/day/:day', protect(['admin', 'hod', 'faculty', 'student']), async (req, res) => {
-  try {
-    const { day } = req.params;
-    const { role } = req.query;
-    const user = req.user;
-
-    const formattedDay = day.charAt(0).toUpperCase() + day.slice(1).toLowerCase();
-
-    const query = { day: formattedDay, role: role.toLowerCase() };
-
-    if (user && user.department) {
-      query.department = user.department;
-    }
-
-    if (role === 'student') {
-      if (user.section) query.section = user.section;
-      if (user.semester) query.semester = user.semester;
-    } else if (role === 'faculty') {
-      if (user.faculty_id) query.facultyId = user.faculty_id;
-    }
-
-    const data = await require('../models/DailyTimetable').find(query);
-
-    if (!data.length) {
-      console.log(`No timetable found for ${formattedDay}, role: ${role}, department: ${user.department}`);
-    }
-
-    res.json(data);
-  } catch (err) {
-    console.error('Timetable fetch error:', err);
-    res.status(500).json({ message: 'Error fetching timetable', error: err.message });
-  }
-});
+// GET - Timetable for a specific day by role and user's department/criteria (using path params for day)
+router.get('/day/:day', protect(['admin', 'hod', 'faculty', 'student']), getTimetableForDay); // <--- Now uses controller function
 
 module.exports = router;
