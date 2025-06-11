@@ -11,7 +11,7 @@ node_modules/
 dist
 dist-ssr
 *.local
-.env
+# .env
 backend/config/Googe-vision-api.json
 
 # Editor directories and files
